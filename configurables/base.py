@@ -152,6 +152,7 @@ class Configurable_class_target(Dynamic_parent, Configurable):
         help = "Metadata options",
         TYPE = Option(help = "The parent class of this target, the class we will be replaced as will be a child class of this.", required = True, type = str, no_edit = True),
         class_name = Option(help = "The name of a class that we will be replaced as.", required = True, type = str, no_edit = True),
+        index = Option(help = "The index of this target. This will be set automatically if available.", type = int, required = False, no_edit = True, default = lambda option, parent: parent.safe_index)
     )
 
 
@@ -224,6 +225,13 @@ class Configurable_class_target(Dynamic_parent, Configurable):
         An ordered list of the ALIASes of each of the configurable loaders that were combined to generate this configurable.
         """
         return [loader.ALIAS for loader in self.loader_list if not loader.pseudo and loader.ALIAS is not None]
+
+    @property
+    def safe_index(self):
+        try:
+            return self.index()
+        except:
+            return None
     
     def index(self):
         """
@@ -251,10 +259,7 @@ class Configurable_class_target(Dynamic_parent, Configurable):
         A string that describes this Configurable object.
         """
         # Get our ID if we've got one.
-        try:
-            desc = "[{}] ".format(self.index())
-        except Exception:
-            desc = ""
+        desc = ("[{}] ".format(self.meta['index'])) if self.meta['index'] is not None else ""
         
         # Start with the name.
         try:
