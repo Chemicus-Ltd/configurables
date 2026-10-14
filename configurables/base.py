@@ -152,7 +152,7 @@ class Configurable_class_target(Dynamic_parent, Configurable):
         help = "Metadata options",
         TYPE = Option(help = "The parent class of this target, the class we will be replaced as will be a child class of this.", required = True, type = str, no_edit = True),
         class_name = Option(help = "The name of a class that we will be replaced as.", required = True, type = str, no_edit = True),
-        index = Option(help = "The index of this target. This will be set automatically if available.", type = int, required = False, no_edit = True, default = lambda option, parent: parent.safe_index)
+        index = Option(help = "The index of this target. This will be set automatically if available.", type = int, required = False, no_edit = True)
     )
 
 
@@ -183,6 +183,8 @@ class Configurable_class_target(Dynamic_parent, Configurable):
         self._file_name = file_name
         
         self.configure_auto_name()
+        if 'meta' not in kwargs or "index" not in kwargs['meta']:
+            self.meta['index'] = self.safe_index
         
         Configurable.__init__(self, validate_now =validate_now, **kwargs)
     
