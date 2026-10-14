@@ -102,6 +102,18 @@ class Configurable_loader():
                 return
             
             pos +=1
+
+    def __len__(self):
+        """
+        Length magic method
+        """
+        return self.size()
+
+    def __getitem__(self, subscript):
+        """
+        Subscript magic method.
+        """
+        return self.resolve(subscript, validate = False)
             
     @property
     def sub_node_paths(self):
