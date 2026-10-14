@@ -4,6 +4,7 @@ Code for loading Configurables from saved file locations.
 
 import itertools
 import glob
+from io import IOBase
 
 import yaml
 
@@ -31,8 +32,14 @@ def parse_loaders(definitions):
         # Load from the location and add to our silico_options object.
         # The name of the attribute we add to is the same as the location we read from, but in lower case...
         try:
-            parser = Configurables_parser(*folders, TYPE = TYPE)
-            parser.parse()
+            if isinstance(folders, IOBase):
+                parser = Configurables_stream_parser(TYPE = TYPE)
+                parser.parse_stream(folders, file_name='data')
+
+            else:
+                parser = Configurables_parser(*folders, TYPE = TYPE)
+                parser.parse()
+            
             parsers[TYPE] = parser
         
         except FileNotFoundError:
@@ -67,19 +74,18 @@ def parse_loaders(definitions):
     return done
 
 
-class Configurables_parser():
+class Configurables_stream_parser():
     """
-    Reads and parses all configurable files from a location.
+    Reads and parses all configurables from data.
     """
-    
-    def __init__(self, *paths, TYPE):
+
+    def __init__(self, TYPE):
         """
         Constructor for Configurables_loader object.
         
         :param paths: Paths to  directories to load .yaml files from. All *.yaml files under each directory will be loaded and processed.
         :param TYPE: The TYPE of the configurables we are loading; this is a string which identifies the type of the configurables (eg, Destination, Calculation etc).
         """
-        self.root_directories = paths
         # A type to set for all configurables we load.
         self.TYPE = TYPE
         # A list of the configurable loaders we have parsed.
@@ -94,47 +100,34 @@ class Configurables_parser():
         # while link:parents refers to loaders of a different type (programs being referenced from a calculation, for example).
         self.has_previous = []
             
-    def parse(self):
+    def parse_stream(self, stream, file_name):
         """
-        Read and parse all .yaml files within our directory.
+        Read and parse all .yaml directives from a stream.
         """
-        # Get our file list; all files within our top directory which end in .yaml.
-        file_list = itertools.chain( *(sorted(glob.glob(glob.escape(root_directory) + "/**/*.yaml", recursive = True)) for root_directory in self.root_directories) )
-        
-        # Now parse them.
-        for file_name in file_list:
-            try:
-                with open(file_name, "rt") as file:
-                    # Parse each.
-                    for config in yaml.safe_load_all(file):
-                        if config is None:
-                            continue
-                        
-                        # Before we do anything else, process the namespace option (if given).
-                        # This automatically alters the tag, alias, next, and previous options.
-                        self.process_namespace(config)
-                        
-                        # If the config has its link:type set to update, file it away separately.
-                        if getopt(config, "link", "type", default = None) == "update":
-                            # An update, no need to pre process.
-                            self.updates.append(Update_loader(file_name, self.TYPE, config))
-                        
-                        else:
-                            # Normal config, pre process and add.
-                            loader = self.pre_process(config, file_name)
-                            self.loaders.append(loader)
-                            
-                            # If the loader has link:parents set, add it to our list.
-                            if hasopt(loader.config, "link", "parents"):
-                                self.has_parents.append((loader, loader.config["link"]['parents']))
-                            
-                            if hasopt(loader.config, "link", "previous"):
-                                self.has_previous.append((loader, loader.config["link"]['previous']))
-                    
-            except FileNotFoundError:
-                # This should be ok to ignore, just means a file was moved inbetween us looking how many files there are and reading them.
-                # Possibly no need to worry about this?
-                pass
+        for config in yaml.safe_load_all(stream):
+            if config is None:
+                continue
+            
+            # Before we do anything else, process the namespace option (if given).
+            # This automatically alters the tag, alias, next, and previous options.
+            self.process_namespace(config)
+            
+            # If the config has its link:type set to update, file it away separately.
+            if getopt(config, "link", "type", default = None) == "update":
+                # An update, no need to pre process.
+                self.updates.append(Update_loader(file_name, self.TYPE, config))
+            
+            else:
+                # Normal config, pre process and add.
+                loader = self.pre_process(config, file_name)
+                self.loaders.append(loader)
+                
+                # If the loader has link:parents set, add it to our list.
+                if hasopt(loader.config, "link", "parents"):
+                    self.has_parents.append((loader, loader.config["link"]['parents']))
+                
+                if hasopt(loader.config, "link", "previous"):
+                    self.has_previous.append((loader, loader.config["link"]['previous']))
     
     def process_namespace(self, config):
         """
@@ -217,3 +210,38 @@ class Configurables_parser():
         else:
             # Use a single loader.
             return Single_loader(config_path, self.TYPE, config)
+
+
+class Configurables_parser(Configurables_stream_parser):
+    """
+    Reads and parses all configurable files from a location.
+    """
+    
+    def __init__(self, *paths, TYPE):
+        """
+        Constructor for Configurables_loader object.
+        
+        :param paths: Paths to  directories to load .yaml files from. All *.yaml files under each directory will be loaded and processed.
+        :param TYPE: The TYPE of the configurables we are loading; this is a string which identifies the type of the configurables (eg, Destination, Calculation etc).
+        """
+        self.root_directories = paths
+        super().__init__(TYPE=TYPE)
+            
+    def parse(self):
+        """
+        Read and parse all .yaml files within our directory.
+        """
+        # Get our file list; all files within our top directory which end in .yaml.
+        file_list = itertools.chain( *(sorted(glob.glob(glob.escape(root_directory) + "/**/*.yaml", recursive = True)) for root_directory in self.root_directories) )
+        
+        # Now parse them.
+        for file_name in file_list:
+            try:
+                with open(file_name, "rt") as file:
+                    # Parse each.
+                    self.parse_stream(file, file_name)
+                    
+            except FileNotFoundError:
+                # This should be ok to ignore, just means a file was moved inbetween us looking how many files there are and reading them.
+                # Possibly no need to worry about this?
+                pass
